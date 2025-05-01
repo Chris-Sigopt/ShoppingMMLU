@@ -9,6 +9,7 @@ import transformers
 import numpy as np
 from utils import *
 import os
+import habana_frameworks.torch.core as htcore
 
 
 parser = argparse.ArgumentParser()
@@ -45,7 +46,7 @@ except:
     raise FileNotFoundError(f"{filename} does not exist. Please check the 'test_subject' argument. ")
 all_samples = test_df.shape[0]
 
-    
+
 for i in range(all_samples):
     system_prompt = gen_system_prompt(args)
     test_prompt = format_example(test_df, i)
@@ -54,7 +55,7 @@ for i in range(all_samples):
         print("Sample %d prompt"%i, prompt)
     truth = test_df.iloc[i, -1]
     inputs = tokenizer(prompt, return_tensors = 'pt')
-    inputs.input_ids = inputs.input_ids.cuda()
+    inputs.input_ids = inputs.input_ids.to("hpu")
     if 'mistral' in model_name or 'mixtral' in model_name or model_name == 'zephyr' or model_name == 'ecellm-m' :
         generate_ids = model.generate(inputs.input_ids, max_new_tokens = args.max_gen_len, pad_token_id=2)
     elif 'qwen' in model_name:
@@ -72,10 +73,10 @@ for i in range(all_samples):
     retrieved_list = generation
     retrieved_list = retrieved_list.lstrip().rstrip()
     if '\n' not in retrieved_list:
-        retrieved_list = retrieved_list.split(',') 
+        retrieved_list = retrieved_list.split(',')
     else:
         retrieved_list = retrieved_list.split('\n')[0]
-        retrieved_list = retrieved_list.split(',') 
+        retrieved_list = retrieved_list.split(',')
     retrieved_int = []
     for ret in retrieved_list:
         try:
@@ -92,7 +93,7 @@ for i in range(all_samples):
     hit = len(set(truth).intersection(set(retrieved_int)))
     hit /= len(truth)
     total_hit += hit
-    
+
     if i % args.print_interval == 0:
         print("Sample %d retrieval"%i, retrieved_list)
         print("Sample %d hit"%i, hit)

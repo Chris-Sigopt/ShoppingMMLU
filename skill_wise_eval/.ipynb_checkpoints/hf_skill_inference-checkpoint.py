@@ -9,6 +9,7 @@ import transformers
 import numpy as np
 from utils import *
 import os
+import habana_frameworks.torch.core as htcore
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--filename', type=str, help='the input file name. By default is json')
@@ -25,8 +26,6 @@ if args.seed != -1:
     transformers.set_seed(args.seed)
 
 
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_flash_sdp(False)
 
 system_prompt = "You are a helpful online shopping assistant. Please answer the following question about online shopping and follow the given instructions.\n\n"
 print(f"Inferencing {args.model_name} model on the skill {args.filename}. \n")
@@ -45,7 +44,7 @@ output_dict = {
 }
 
 for i in range(test_df.shape[0]):
-    
+
     prompt = system_prompt + test_df.iloc[i]['input_field']
     task_type = test_df.iloc[i]['task_type']
 
@@ -54,7 +53,7 @@ for i in range(test_df.shape[0]):
     else:
         output_len = 100
     inputs = tokenizer(prompt, return_tensors = 'pt')
-    inputs.input_ids = inputs.input_ids.cuda()
+    inputs.input_ids = inputs.input_ids.to("hpu")
     if i % args.print_interval == 0:
         print(f"Sample {i} prompt: {prompt}")
 
@@ -66,14 +65,14 @@ for i in range(test_df.shape[0]):
         generate_ids = model.generate(inputs.input_ids, max_new_tokens = output_len, pad_token_id = 128001, temperature = 0.0001)
     elif 'qwen' in args.model_name:
         generate_ids = model.generate(inputs.input_ids, max_new_tokens = output_len, pad_token_id = 151643, temperature=0.0001)
-    elif 'phi' in args.model_name or 'ecellm-s' == args.model_name: 
+    elif 'phi' in args.model_name or 'ecellm-s' == args.model_name:
         if task_type == 'multiple-choice':
             prompt += "\n(Please output a number only) Output: \n"
         inputs = tokenizer(prompt, return_tensors = 'pt')
-        inputs.input_ids = inputs.input_ids.cuda()
+        inputs.input_ids = inputs.input_ids.to("hpu")
         generate_ids = model.generate(inputs.input_ids, max_new_tokens = output_len, pad_token_id = 50256, temperature=0)
     else:
-        generate_ids = model.generate(inputs.input_ids, max_new_tokens = output_len, temperature=0)    
+        generate_ids = model.generate(inputs.input_ids, max_new_tokens = output_len, temperature=0)
 
     result = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
     result = result[0]
@@ -83,7 +82,7 @@ for i in range(test_df.shape[0]):
         print(f"Sample {i} answer: {generation}")
         print()
 
-        
+
 
 
 
@@ -95,4 +94,3 @@ output_df = pd.DataFrame(output_dict)
 output_df.to_json(output_filename, orient='records', lines=True)
 end_time = time.time()
 print(f"Inference of {input_filename} with {args.model_name} model takes {end_time-start_time} seconds. ")
-    

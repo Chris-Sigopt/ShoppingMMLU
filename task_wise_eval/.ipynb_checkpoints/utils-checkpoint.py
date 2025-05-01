@@ -1,10 +1,8 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
+import habana_frameworks.torch.core as htcore
 
 def load_tokenizer_and_model(model_name):
-    if 'qwen' in model_name or 'gemma' in model_name or 'llama3' in model_name:
-        torch.backends.cuda.enable_mem_efficient_sdp(False)
-        torch.backends.cuda.enable_flash_sdp(False)
     if model_name == 'llama':
         model_path = '../llama1'
     if model_name == 'llama2-7b':
@@ -77,11 +75,11 @@ def load_tokenizer_and_model(model_name):
         model_path = 'meta-llama/Meta-Llama-3-8B-Instruct'
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
     if 'mixtral' in model_name:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype='auto', trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype='auto', trust_remote_code=True).to("hpu")
     elif 'gemma' in model_name:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
 
     return tokenizer, model
 
@@ -98,7 +96,7 @@ def format_example(df, idx, is_multi_choice=False, args=None):
     if not is_multi_choice:
         prompt = df.iloc[idx, 0]
         answer = df.iloc[idx, 1]
-    
+
         return prompt
     else:
         if not args.use_letter_choices:
@@ -113,7 +111,7 @@ def format_example(df, idx, is_multi_choice=False, args=None):
         if 'review_rating_prediction' not in args.test_subject:
             candidates = eval(df.iloc[idx, 1])
             for j in range(k):
-                if args.use_letter_choices: 
+                if args.use_letter_choices:
                     prompt += "\n({}) {}".format(choices[j], candidates[j])
                 else:
                     prompt += "\n{}. {}".format(choices[j], candidates[j])

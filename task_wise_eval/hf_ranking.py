@@ -9,6 +9,7 @@ import transformers
 import numpy as np
 from utils import *
 
+import habana_frameworks.torch.core as htcore
 # This type of tasks ask an LLM to generate a re-ranked list of indices
 # the evaluation metric is NDCG
 # This applies to a range of re-ranking tasks
@@ -84,7 +85,7 @@ for i in range(all_samples):
         print("Sample %d prompt"%i, prompt)
     weight = test_df.iloc[i, -1]
     inputs = tokenizer(prompt, return_tensors = 'pt')
-    inputs.input_ids = inputs.input_ids.cuda()
+    inputs.input_ids = inputs.input_ids.to("hpu")
     with torch.no_grad():
         generate_ids = model.generate(inputs.input_ids, max_new_tokens = args.max_gen_len, temperature=0.001)
     result = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
@@ -105,24 +106,24 @@ for i in range(all_samples):
             if i % args.print_interval == 0:
                 print("Sample %d ill format"%i)
             continue
-    
+
     if len(ranked_list) != len(weight):
         ill_format += 1
         if i % args.print_interval == 0:
             print("Sample %d ill format"%i)
-        
+
     if not is_permutation(ranked_list):
         ill_format += 1
         if i % args.print_interval == 0:
             print("Sample %d ill format"%i)
-            
+
     # start computing
     if i % args.print_interval == 0:
         print("Sample %d weight"%i, weight)
     ndcg_val = ndcg(ranked_list, weight)
     total_ndcg += ndcg_val
     if i % args.print_interval == 0:
-        
+
         print("Sample %d ranking"%i, ranked_list)
         print("Sample %d ndcg"%i, ndcg_val)
         print()

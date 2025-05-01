@@ -8,9 +8,7 @@ import torch
 import transformers
 from utils import *
 import os
-    
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_flash_sdp(False)
+import habana_frameworks.torch.core as htcore
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--test_subject', type=str, default='attribute_selection')
@@ -40,7 +38,7 @@ else:
 
 
 start_time = time.time()
-    
+
 print("Running %s model on %s task" % (model_name, test_subject))
 tokenizer, model = load_tokenizer_and_model(model_name)
 
@@ -58,7 +56,7 @@ for i in range(all_samples):
     few_shot_prompt = gen_system_prompt(args, is_multiple_choice=True)
     test_prompt = format_example(test_df, i, is_multi_choice=True, args=args)
     prompt = few_shot_prompt + test_prompt
-    
+
     label = test_df.iloc[i, -1]
     if 'review_rating_prediction' not in test_subject:
         label = choices[int(label)]
@@ -68,7 +66,7 @@ for i in range(all_samples):
     if i % print_interval == 0:
         print("Sample %d"%i, prompt)
     inputs = tokenizer(prompt, return_tensors='pt')
-    inputs.input_ids = inputs.input_ids.cuda()
+    inputs.input_ids = inputs.input_ids.to("hpu")
 
     if 'mistral' in args.model_name or 'zephyr' in args.model_name or 'mixtral' in args.model_name or 'ecellm-m' == args.model_name:
         generate_ids = model.generate(inputs.input_ids, max_new_tokens=4, temperature=0, pad_token_id=2)
@@ -101,7 +99,7 @@ for i in range(all_samples):
         print(f"Sample {i}, pred {answer}, label {label}")
         print()
 
-    
+
 print("%s model's accuracy on %s task is %.4f" % (model_name, test_subject, correct/all_samples))
 print("There are %d ill-formatted examples out of %d" % (ill_format, all_samples))
 print("Time Cost: %.4fs"%(time.time() - start_time))

@@ -4,6 +4,7 @@ import argparse
 from sentence_transformers import SentenceTransformer
 from metrics import *
 import os
+import habana_frameworks.torch.core as htcore
 
 
 parser = argparse.ArgumentParser()
@@ -18,8 +19,8 @@ assert data_df.shape[0] == output_df.shape[0]
 
 
 per_task_metrics = {}
-eval_model = SentenceTransformer('all-MiniLM-L6-v2').cuda()
-eval_model_multilingual = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2').cuda()
+eval_model = SentenceTransformer('all-MiniLM-L6-v2').to("hpu")
+eval_model_multilingual = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2').to("hpu")
 
 
 for i in range(data_df.shape[0]):
@@ -30,7 +31,7 @@ for i in range(data_df.shape[0]):
 
     if task_name not in per_task_metrics:
         per_task_metrics[task_name] = {
-            'metric': metric, 
+            'metric': metric,
             'sample_score': []
         }
 
@@ -42,7 +43,7 @@ for i in range(data_df.shape[0]):
             print(f"Sample {i}, truth: {truth}")
             print(f"Metric ({metric}): {acc}")
             print()
-            
+
     elif metric == 'hit rate@3':
         hit = hit_rate(generation, truth)
         per_task_metrics[task_name]['sample_score'].append(hit)
@@ -51,7 +52,7 @@ for i in range(data_df.shape[0]):
             print(f"Sample {i}, truth: {truth}")
             print(f"Metric ({metric}): {hit}")
             print()
-            
+
     elif metric == 'rougel':
         rouge_metric = rougel(generation, truth)
         per_task_metrics[task_name]['sample_score'].append(rouge_metric)
@@ -60,7 +61,7 @@ for i in range(data_df.shape[0]):
             print(f"Sample {i}, truth: {truth}")
             print(f"Metric ({metric}): {rouge_metric}")
             print()
-            
+
     elif metric == 'sent-transformer':
         sent_transformer_score = sent_transformer(generation, truth, eval_model)
         per_task_metrics[task_name]['sample_score'].append(sent_transformer_score)
@@ -77,7 +78,7 @@ for i in range(data_df.shape[0]):
             print(f"Sample {i}, truth: {truth}")
             print(f"Metric ({metric}): {sent_transformer_score}")
             print()
-        
+
     elif metric == 'micro f1':
         # we need to record tp, fp, fn
         tp, fp, fn = tp_fp_fn(generation, truth)
@@ -86,7 +87,7 @@ for i in range(data_df.shape[0]):
             print(f"Sample {i}, generation: {generation}")
             print(f"Sample {i}, truth: {truth}")
             print(f"Metric ({metric}): tp {tp}, fp {fp}, fn {fn}")
-            print() 
+            print()
 
     elif metric == 'ndcg':
         ndcg_val = ndcg_eval(generation, truth)
@@ -95,7 +96,7 @@ for i in range(data_df.shape[0]):
             print(f"Sample {i}, generation: {generation}")
             print(f"Sample {i}, truth: {truth}")
             print(f"Metric ({metric}): {ndcg_val}")
-            print() 
+            print()
 
     elif metric == 'bleu':
         bleu_val = bleu(generation, truth)
@@ -104,7 +105,7 @@ for i in range(data_df.shape[0]):
             print(f"Sample {i}, generation: {generation}")
             print(f"Sample {i}, truth: {truth}")
             print(f"Metric ({metric}): {bleu_val}")
-            print() 
+            print()
     elif metric == 'jp-bleu':
         bleu_val = bleu(generation, truth, jp=True)
         per_task_metrics[task_name]['sample_score'].append(bleu_val)
@@ -112,9 +113,9 @@ for i in range(data_df.shape[0]):
             print(f"Sample {i}, generation: {generation}")
             print(f"Sample {i}, truth: {truth}")
             print(f"Metric ({metric}): {bleu_val}")
-            print() 
+            print()
 
-    
+
 
 # aggregate per_task_metric
 for k in per_task_metrics:
@@ -145,7 +146,6 @@ if not os.path.exists(f'skill_metrics/{args.data_filename}/'):
 overall_metrics_df.to_json(f"skill_metrics/{args.data_filename}/{args.output_filename}_metrics.json", orient='records', lines=True)
 print(f"The overall score of output file '{args.output_filename}' on skill '{args.data_filename}' is {track_wise_score}")
 
-    
-        
 
-        
+
+

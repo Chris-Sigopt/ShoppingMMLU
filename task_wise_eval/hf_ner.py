@@ -7,7 +7,7 @@ import sys
 import json
 import torch
 from utils import *
-
+import habana_frameworks.torch.core as htcore
 
 
 
@@ -48,7 +48,7 @@ for i in range(all_samples):
         label_lower.append(l.lower())
 
     inputs = tokenizer(prompt, return_tensors='pt')
-    inputs.input_ids = inputs.input_ids.cuda()
+    inputs.input_ids = inputs.input_ids.to("hpu")
     if 'mistral' not in model_name and 'mixtral' not in model_name:
         generate_ids = model.generate(inputs.input_ids, max_new_tokens = args.max_gen_len)
     else:
@@ -59,7 +59,7 @@ for i in range(all_samples):
     if i % args.print_interval == 0:
         print("Sample %d answer:"%i, answer)
         print("Sample %d ground truth:"%i, label)
-    answer = answer.split('\n')[0].lstrip(' ').rstrip(' ')        
+    answer = answer.split('\n')[0].lstrip(' ').rstrip(' ')
     answer = answer.split(',')
     answer = [a for a in answer if a != '']
     answer_lower = []
@@ -79,7 +79,7 @@ precision = true_positive / (true_positive + false_positive)
 recall = true_positive / (true_positive + false_negative)
 f1 = 2 * precision * recall / (precision + recall) if precision + recall != 0 else 0
 
-print("Time Cost: %.4fs" % (time.time() - start_time))   
+print("Time Cost: %.4fs" % (time.time() - start_time))
 
 print("The average F1 score of %s on %s task is %.4f, precision %.4f, recall %.4f"%(args.model_name, test_subject, f1, precision, recall))
 

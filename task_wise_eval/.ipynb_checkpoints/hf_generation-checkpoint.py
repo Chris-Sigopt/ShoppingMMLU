@@ -12,10 +12,7 @@ import evaluate
 from evaluate import load
 from rouge_score import rouge_scorer
 from utils import *
-
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_flash_sdp(False)
-
+import habana_frameworks.torch.core as htcore
 
 
 
@@ -46,11 +43,11 @@ elif 'translation' in args.test_subject:
     print("Metric is BLEU score")
 elif 'multilingual' in args.test_subject:
     metric = 'multilingual-sent-transformer'
-    eval_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2').cuda()
+    eval_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2').to("hpu")
     print("Metric is multilingual sentence transformer similarity")
 else:
     metric = 'sent-transformer'
-    eval_model = SentenceTransformer('all-MiniLM-L6-v2').cuda()
+    eval_model = SentenceTransformer('all-MiniLM-L6-v2').to("hpu")
     print("Metric is sentence transformer similarity.")
 
 
@@ -61,7 +58,7 @@ except:
     raise FileNotFoundError(f"{filename} does not exist. Please modify the 'test_subject' argument. ")
 total_score = 0
 all_samples = test_df.shape[0]
-    
+
 
 for i in range(all_samples):
     train_prompt = gen_system_prompt(args)
@@ -72,7 +69,7 @@ for i in range(all_samples):
         print("Sample %d prompt"%i, prompt)
     label = test_df.iloc[i, -1]
     inputs = tokenizer(prompt, return_tensors = 'pt')
-    inputs.input_ids = inputs.input_ids.cuda()
+    inputs.input_ids = inputs.input_ids.to("hpu")
     if 'mistral' in args.model_name or 'mixtral' in args.model_name or 'zephyr' in args.model_name or 'ecellm-m' == args.model_name:
         generate_ids = model.generate(inputs.input_ids, max_new_tokens = args.max_gen_len, pad_token_id = 2)
     elif 'qwen' in args.model_name:
@@ -95,7 +92,7 @@ for i in range(all_samples):
         if isinstance(label, str):
             truth_embedding = eval_model.encode([label])[0]
             generation_embedding = eval_model.encode([generation])[0]
-            current_score = ((generation_embedding * truth_embedding).sum()) 
+            current_score = ((generation_embedding * truth_embedding).sum())
             current_score /= (np.linalg.norm(generation_embedding, ord=2) * np.linalg.norm(truth_embedding, ord=2))
             total_score += current_score
         else:
@@ -131,4 +128,4 @@ for i in range(all_samples):
 
 
 print("The average score of %s on %s task is %.4f"%(model_name, test_subject, total_score / all_samples))
-print("Time Cost: %.4fs" % (time.time() - start_time))   
+print("Time Cost: %.4fs" % (time.time() - start_time))

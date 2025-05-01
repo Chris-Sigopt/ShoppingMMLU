@@ -1,10 +1,8 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
+import habana_frameworks.torch.core as htcore
 
 def load_tokenizer_and_model(model_name):
-    if 'qwen' in model_name or 'gemma' in model_name or 'llama3' in model_name:
-        torch.backends.cuda.enable_mem_efficient_sdp(False)
-        torch.backends.cuda.enable_flash_sdp(False)
     if model_name == 'llama':
         model_path = '../llama1'
     if model_name == 'llama2-7b':
@@ -77,10 +75,10 @@ def load_tokenizer_and_model(model_name):
         model_path = 'meta-llama/Meta-Llama-3-8B-Instruct'
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
     if 'mixtral' in model_name:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype='auto', trust_remote_code=True, attn_implementation="flash_attention_2")
+        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype='auto', trust_remote_code=True, attn_implementation="flash_attention_2").to("hpu")
     elif 'gemma' in model_name:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
 
     return tokenizer, model
