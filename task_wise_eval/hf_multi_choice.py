@@ -17,6 +17,7 @@ parser.add_argument('--seed', type=int, default=-1)
 parser.add_argument("--print_interval", type=int, default=20)
 parser.add_argument('--use_task_specific_prompt', action='store_true')
 parser.add_argument('--use_letter_choices', action='store_true')
+parser.add_argument('--quant_config', default="")
 args = parser.parse_args()
 
 seed = args.seed
@@ -27,6 +28,7 @@ if seed != -1:
 model_name = args.model_name
 test_subject = args.test_subject
 print_interval = args.print_interval
+quant_config = args.quant_config
 if not args.use_letter_choices:
     if 'review_rating_prediction' not in test_subject:
         choices = ['0', '1', '2', '3']
@@ -40,7 +42,7 @@ else:
 start_time = time.time()
 
 print("Running %s model on %s task" % (model_name, test_subject))
-tokenizer, model = load_tokenizer_and_model(model_name)
+tokenizer, model = load_tokenizer_and_model(model_name, quant_config)
 
 filename = f'../data/multiple_choice/{test_subject}_dataset.csv'
 try:
@@ -99,6 +101,8 @@ for i in range(all_samples):
         print(f"Sample {i}, pred {answer}, label {label}")
         print()
 
+if quant_config != "":
+    finalize_quantization(model, quant_config)
 
 print("%s model's accuracy on %s task is %.4f" % (model_name, test_subject, correct/all_samples))
 print("There are %d ill-formatted examples out of %d" % (ill_format, all_samples))
