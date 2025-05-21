@@ -18,6 +18,7 @@ parser.add_argument('--print_interval', type=int, default=20)
 parser.add_argument('--output_filename', type=str, help='Suffix to output filename')
 parser.add_argument('--multi_choice_tokens', type=int, default=1, help='The maximum token length for multiple-choice questions. By default we set to 1. ')
 parser.add_argument('--seed', type=int, default=-1, help='random seed, default -1 is not set')
+parser.add_argument('--quant_config', default="")
 args = parser.parse_args()
 if args.seed != -1:
     random.seed(args.seed)
@@ -31,7 +32,7 @@ print(f"Inferencing {args.model_name} model on the skill {args.filename}. \n")
 
 start_time = time.time()
 test_df = pd.read_json(f'../data/skills/{args.filename}.json', lines=True)
-tokenizer, model = load_tokenizer_and_model(args.model_name)
+tokenizer, model = load_tokenizer_and_model(args.model_name, args.quant_config)
 tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = 'left'
 print(f"Skill {args.filename} has {test_df.shape[0]} samples in total. \n")
@@ -91,4 +92,8 @@ output_filename = f"skill_inference_results/{input_filename}/{args.model_name}_{
 output_df = pd.DataFrame(output_dict)
 output_df.to_json(output_filename, orient='records', lines=True)
 end_time = time.time()
+
+if args.quant_config != "":
+    finalize_quantization(model, args.quant_config)
+
 print(f"Inference of {input_filename} with {args.model_name} model takes {end_time-start_time} seconds. ")
