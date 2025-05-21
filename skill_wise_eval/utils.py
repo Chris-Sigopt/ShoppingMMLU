@@ -2,7 +2,34 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import habana_frameworks.torch.core as htcore
 
-def load_tokenizer_and_model(model_name):
+def setup_quantization(model, quant_config):
+    try:
+        from neural_compressor.torch.quantization import FP8Config, convert, prepare
+    except ImportError:
+        raise ImportError(
+            "Module neural_compressor is missing. Please use a newer Synapse version to use quantization."
+        )
+
+    config = FP8Config.from_json_file(quant_config)
+    if config.measure:
+        model = prepare(model, config)
+    if config.quantize:
+        model = convert(model, config)
+
+    return model
+
+def finalize_quantization(model, quant_config):
+    try:
+        from neural_compressor.torch.quantization import FP8Config, finalize_calibration
+    except ImportError:
+        raise ImportError(
+            "Module neural_compressor is missing. Please use a newer Synapse version to use quantization."
+        )
+    config = FP8Config.from_json_file(quant_config)
+    if config.measure:
+        finalize_calibration(model)
+
+def load_tokenizer_and_model(model_name, quant_config):
     if model_name == 'llama':
         model_path = '../llama1'
     if model_name == 'llama2-7b':
@@ -80,5 +107,7 @@ def load_tokenizer_and_model(model_name):
         model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
     else:
         model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
+    if quant_config != "":
+        model = setup_quantization(model, quant_config)
 
     return tokenizer, model
