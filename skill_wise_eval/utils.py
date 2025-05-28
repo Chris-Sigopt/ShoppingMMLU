@@ -109,5 +109,6 @@ def load_tokenizer_and_model(model_name, quant_config):
         model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
     if quant_config != "":
         model = setup_quantization(model, quant_config)
+    model = torch.compile(model,backend="hpu_backend")
 
     return tokenizer, model
