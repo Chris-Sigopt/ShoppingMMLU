@@ -2,6 +2,6 @@
     "method": "HOOKS",
     "mode": "QUANTIZE",
     "observer": "maxabs",
-    "scale_method": "maxabs_arbitrary",
+    "scale_method": "unit_scale",
     "dump_stats_path": "./inc_output/measure"
 }
