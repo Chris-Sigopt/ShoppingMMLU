@@ -21,6 +21,6 @@ services:
         mkdir data
         unzip data.zip -d data/
         cd skill_wise_eval
-        python3 hf_skill_inference.py --model_name llama3-8b --filename skill1_concept_SHORT --output_filename output_docker_test_THROWAWAY --quant_config quant_config/maxabs_measure.json
-        python3 hf_skill_inference.py --model_name llama3-8b --filename skill1_concept_SHORT --output_filename output_docker_test --quant_config quant_config/maxabs_quant.json
-        python3 skill_evaluation.py --data_filename skill1_concept_SHORT --output_filename llama3-8b_output_docker_test
+        nice -n -20 python3 hf_skill_inference.py --model_name llama3-8b --filename skill1_concept --output_filename output_docker_test_THROWAWAY --quant_config quant_config/maxabs_measure.json
+        nice -n -20 python3 hf_skill_inference.py --model_name llama3-8b --filename skill1_concept --output_filename output_docker_test --quant_config quant_config/maxabs_quant.json
+        nice -n -20 python3 skill_evaluation.py --data_filename skill1_concept --output_filename llama3-8b_output_docker_test
