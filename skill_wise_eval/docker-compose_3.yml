@@ -1,5 +1,5 @@
 services:
-  ShoppingMMLU:
+  ShoppingMMLU-bf3:
     image: vault.habana.ai/gaudi-docker/1.21.1/ubuntu24.04/habanalabs/pytorch-installer-2.6.0:latest
     runtime: habana
     environment:
