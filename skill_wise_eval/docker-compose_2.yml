@@ -1,0 +1,25 @@
+services:
+  ShoppingMMLU:
+    image: vault.habana.ai/gaudi-docker/1.21.1/ubuntu24.04/habanalabs/pytorch-installer-2.6.0:latest
+    runtime: habana
+    environment:
+      - HABANA_VISIBLE_DEVICES=2
+      - OMPI_MCA_btl_vader_single_copy_mechanism=none
+      - HF_TOKEN=<YOUR TOKEN>
+      - HF_HOME=/data/huggingface
+      - PT_HPU_LAZY_MODE=1
+    cap_add:
+      - sys_nice
+    volumes:
+      - ~/ShoppingMMLU:/shopping
+    command:
+      - bash
+      - -c
+      - |
+        cd /shopping
+        pip install -r requirements.txt
+        mkdir data
+        unzip data.zip -d data/
+        cd skill_wise_eval
+        python3 hf_skill_inference.py --model_name llama3-8b --filename skill1_concept --output_filename output_docker_test_bf16_2
+        python3 skill_evaluation.py --data_filename skill1_concept --output_filename llama3-8b_output_docker_test_bf16_2
