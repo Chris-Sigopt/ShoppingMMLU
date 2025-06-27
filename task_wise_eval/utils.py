@@ -4,7 +4,6 @@ import habana_frameworks.torch.core as htcore
 
 from huggingface_hub import list_repo_files, snapshot_download
 from transformers import modeling_utils
-import logging
 import tempfile
 import os
 import json
@@ -130,9 +129,9 @@ def setup_distributed_model(model_path):
     # List of model types that need max position embeddings capped at 8192
     deepspeed.init_distributed(dist_backend="hccl")
     with deepspeed.OnDevice(dtype=torch.bfloat16, device="meta"):
-        if 'mixtral' in model_name:
+        if 'mixtral' in model_path:
             model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype='auto', trust_remote_code=True)
-        elif 'gemma' in model_name:
+        elif 'gemma' in model_path:
             model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.bfloat16, trust_remote_code=True)
         else:
             model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.bfloat16, trust_remote_code=True)
@@ -181,7 +180,7 @@ def finalize_quantization(model, quant_config):
     if config.measure:
         finalize_calibration(model)
 
-def load_tokenizer_and_model(model_name, quant_config, use_deepseed=False):
+def load_tokenizer_and_model(model_name, quant_config, use_deepspeed=False):
     if model_name == 'llama':
         model_path = '../llama1'
     if model_name == 'llama2-7b':
@@ -255,7 +254,7 @@ def load_tokenizer_and_model(model_name, quant_config, use_deepseed=False):
     if model_name == 'llama3-8b-instruct':
         model_path = 'meta-llama/Meta-Llama-3-8B-Instruct'
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    if use_deepseed:
+    if use_deepspeed:
         model = setup_distributed_model(model_path)
     else:
         if 'mixtral' in model_name:
