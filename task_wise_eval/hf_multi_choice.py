@@ -17,6 +17,7 @@ parser.add_argument('--seed', type=int, default=-1)
 parser.add_argument("--print_interval", type=int, default=20)
 parser.add_argument('--use_task_specific_prompt', action='store_true')
 parser.add_argument('--use_letter_choices', action='store_true')
+parser.add_argument('--deepspeed', action="store_true")
 parser.add_argument('--quant_config', default="")
 args = parser.parse_args()
 
@@ -29,6 +30,15 @@ model_name = args.model_name
 test_subject = args.test_subject
 print_interval = args.print_interval
 quant_config = args.quant_config
+
+if args.deepspeed:
+    from transformers.integrations.deepspeed import is_deepspeed_available
+    if not is_deepspeed_available():
+        raise ImportError(
+            "--use_deepspeed requires deepspeed: `pip install"
+            " git+https://github.com/HabanaAI/DeepSpeed.git@1.21.0`."
+        )
+
 if not args.use_letter_choices:
     if 'review_rating_prediction' not in test_subject:
         choices = ['0', '1', '2', '3']
@@ -42,7 +52,7 @@ else:
 start_time = time.time()
 
 print("Running %s model on %s task" % (model_name, test_subject))
-tokenizer, model = load_tokenizer_and_model(model_name, quant_config)
+tokenizer, model = load_tokenizer_and_model(model_name, quant_config, args.deepspeed)
 
 filename = f'../data/multiple_choice/{test_subject}_dataset.csv'
 try:

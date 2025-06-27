@@ -2,6 +2,157 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import habana_frameworks.torch.core as htcore
 
+from huggingface_hub import list_repo_files, snapshot_download
+from transformers import modeling_utils
+import tempfile
+import os
+import json
+from pathlib import Path
+from transformers.utils import is_offline_mode
+
+def get_repo_root(model_name_or_path, local_rank=-1, token=None):
+    """
+    Downloads the specified model checkpoint and returns the repository where it was downloaded.
+    """
+    if Path(model_name_or_path).is_dir():
+        # If it is a local model, no need to download anything
+        return model_name_or_path
+    else:
+        # Checks if online or not
+        if is_offline_mode():
+            if local_rank == 0:
+                print("Offline mode: forcing local_files_only=True")
+
+        # Only download PyTorch weights by default
+        if any(
+            ".safetensors" in filename for filename in list_repo_files(model_name_or_path, token=token)
+        ):  # Some models like Falcon-180b are in only safetensors format
+            allow_patterns = ["*.safetensors"]
+        elif any(".bin" in filename for filename in list_repo_files(model_name_or_path, token=token)):
+            allow_patterns = ["*.bin"]
+        else:
+            raise TypeError("Only PyTorch models are supported")
+
+        # Download only on first process
+        if local_rank in [-1, 0]:
+            cache_dir = snapshot_download(
+                model_name_or_path,
+                local_files_only=is_offline_mode(),
+                cache_dir=os.getenv("TRANSFORMERS_CACHE", None),
+                allow_patterns=allow_patterns,
+                max_workers=16,
+                token=token,
+            )
+            if local_rank == -1:
+                # If there is only one process, then the method is finished
+                return cache_dir
+
+        # Make all processes wait so that other processes can get the checkpoint directly from cache
+        if torch.distributed.is_initialized():
+            torch.distributed.barrier()
+
+        return snapshot_download(
+            model_name_or_path,
+            local_files_only=is_offline_mode(),
+            cache_dir=os.getenv("TRANSFORMERS_CACHE", None),
+            allow_patterns=allow_patterns,
+            token=token,
+        )
+
+def get_checkpoint_files(model_name_or_path, local_rank, token=None):
+    cached_repo_dir = get_repo_root(model_name_or_path, local_rank=local_rank, token=token)
+
+    # Extensions: .bin | .safetensors | .pt
+    # Creates a list of paths from all downloaded files in cache dir
+
+    if any(file.suffix == ".bin" for file in Path(cached_repo_dir).rglob("*")):
+        (name, ext) = os.path.splitext(modeling_utils.WEIGHTS_NAME)
+    elif any(file.suffix == ".safetensors" for file in Path(cached_repo_dir).rglob("*")):
+        (name, ext) = os.path.splitext(modeling_utils.SAFE_WEIGHTS_NAME)
+    else:
+        (name, ext) = ("*", ".pt")
+
+    file_list = [
+        str(entry)
+        for entry in Path(cached_repo_dir).rglob("*")
+        if (entry.is_file() and entry.name.startswith(name) and entry.name.endswith(ext))
+    ]
+
+    return file_list
+
+
+
+def write_checkpoints_json(model_name_or_path, local_rank, f, token=None):
+    """
+    Dumps metadata into a JSON file for DeepSpeed-inference.
+    """
+    checkpoint_files = get_checkpoint_files(model_name_or_path, local_rank, token)
+    data = {"type": "ds_model", "checkpoints": checkpoint_files, "version": 1.0}
+    json.dump(data, f)
+    f.flush()
+
+def get_ds_injection_policy(model_path):
+    policy = {}
+    if model_path:
+        if "llama" in model_path:
+            from transformers.models.llama.modeling_llama import LlamaDecoderLayer
+            policy = {LlamaDecoderLayer: ("self_attn.o_proj", "mlp.down_proj")}
+
+        elif "mistral" in model_type:
+            from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
+            policy = {MistralDecoderLayer: ("self_attn.o_proj", "mlp.down_proj")}
+
+        elif "bloom" in model_path:
+            from transformers.models.bloom.modeling_bloom import BloomBlock
+            policy = {BloomBlock: ("self_attention.dense", "mlp.dense_4h_to_h")}
+
+        elif "opt" in model_path:
+            from transformers.models.opt.modeling_opt import OPTDecoderLayer
+            policy = {OPTDecoderLayer: ("self_attn.out_proj", ".fc2")}
+
+        elif "gpt2" in model_path:
+            from transformers.models.gpt2.modeling_gpt2 import GPT2MLP
+            policy = {GPT2MLP: ("attn.c_proj", "mlp.c_proj")}
+
+        elif "gptj" in model_path:
+            from transformers.models.gptj.modeling_gptj import GPTJBlock
+            policy = {GPTJBlock: ("attn.out_proj", "mlp.fc_out")}
+
+        elif "gpt_neox" in model_path:
+            from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXLayer
+
+            policy = {GPTNeoXLayer: ("attention.dense", "mlp.dense_4h_to_h")}
+    return policy
+
+def setup_distributed_model(model_path):
+    import deepspeed
+    # List of model types that need max position embeddings capped at 8192
+    deepspeed.init_distributed(dist_backend="hccl")
+    with deepspeed.OnDevice(dtype=torch.bfloat16, device="meta"):
+        if 'mixtral' in model_path:
+            model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype='auto', trust_remote_code=True)
+        elif 'gemma' in model_path:
+            model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.bfloat16, trust_remote_code=True)
+        else:
+            model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.bfloat16, trust_remote_code=True)
+    checkpoints_json = tempfile.NamedTemporaryFile(suffix=".json", mode="+w")
+    local_rank = int(os.getenv("LOCAL_RANK", "0"))
+    write_checkpoints_json(
+            model_path,
+            local_rank,
+            checkpoints_json,
+            token=None,
+        )
+    ds_inference_kwargs = {"dtype": torch.bfloat16}
+    ds_inference_kwargs["tensor_parallel"] = {"tp_size": 8}
+    ds_inference_kwargs["enable_cuda_graph"] = False
+    ds_inference_kwargs["injection_policy"] = get_ds_injection_policy(model_path)
+    ds_inference_kwargs["checkpoint"] = checkpoints_json.name
+    model = deepspeed.init_inference(model, **ds_inference_kwargs)
+    model = model.module
+
+    return model
+
 def setup_quantization(model, quant_config):
     try:
         from neural_compressor.torch.quantization import FP8Config, convert, prepare
@@ -29,7 +180,7 @@ def finalize_quantization(model, quant_config):
     if config.measure:
         finalize_calibration(model)
 
-def load_tokenizer_and_model(model_name, quant_config):
+def load_tokenizer_and_model(model_name, quant_config, use_deepspeed=False):
     if model_name == 'llama':
         model_path = '../llama1'
     if model_name == 'llama2-7b':
@@ -44,6 +195,8 @@ def load_tokenizer_and_model(model_name, quant_config):
         model_path = 'meta-llama/Llama-2-13b-chat-hf'
     if model_name == 'llama2-70b-chat':
         model_path = 'meta-llama/Llama-2-70b-chat-hf'
+    if model_name == 'llama3-70b':
+        model_path = 'meta-llama/Llama-3.1-70B-Instruct'
     if model_name == 'alpaca':
         model_path = '../alpaca'
     if model_name == 'vicuna1':
@@ -101,12 +254,15 @@ def load_tokenizer_and_model(model_name, quant_config):
     if model_name == 'llama3-8b-instruct':
         model_path = 'meta-llama/Meta-Llama-3-8B-Instruct'
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    if 'mixtral' in model_name:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype='auto', trust_remote_code=True).to("hpu")
-    elif 'gemma' in model_name:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
+    if use_deepspeed:
+        model = setup_distributed_model(model_path)
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
+        if 'mixtral' in model_name:
+            model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype='auto', trust_remote_code=True).to("hpu")
+        elif 'gemma' in model_name:
+            model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
+        else:
+            model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
     if quant_config != "":
         model = setup_quantization(model, quant_config)
     model = torch.compile(model,backend="hpu_backend")
