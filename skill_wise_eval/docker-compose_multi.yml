@@ -3,7 +3,7 @@ services:
     image: vault.habana.ai/gaudi-docker/1.21.1/ubuntu24.04/habanalabs/pytorch-installer-2.6.0:latest
     runtime: habana
     environment:
-      - HABANA_VISIBLE_DEVICES=0
+      - HABANA_VISIBLE_DEVICES=all
       - OMPI_MCA_btl_vader_single_copy_mechanism=none
       - HF_TOKEN=<YOUR TOKEN>
       - HF_HOME=/data/huggingface
