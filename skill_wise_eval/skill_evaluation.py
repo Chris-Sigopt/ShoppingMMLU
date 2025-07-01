@@ -14,7 +14,7 @@ parser.add_argument('--print_interval', type=int, default=20)
 args = parser.parse_args()
 
 data_df = pd.read_json(f'../data/skills/{args.data_filename}.json', lines=True)
-output_df = pd.read_json(f'skill_inference_results/{args.data_filename}/{args.output_filename}.json', lines=True)
+output_df = pd.read_json(f'./skill_inference_results/{args.data_filename}/{args.output_filename}.json', lines=True)
 assert data_df.shape[0] == output_df.shape[0]
 
 
