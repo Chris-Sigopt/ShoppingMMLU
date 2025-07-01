@@ -10,6 +10,18 @@ import json
 from pathlib import Path
 from transformers.utils import is_offline_mode
 
+def override_print(enable):
+    import builtins as __builtin__
+
+    builtin_print = __builtin__.print
+
+    def print(*args, **kwargs):
+        force = kwargs.pop("force", False)
+        if force or enable:
+            builtin_print(*args, **kwargs)
+
+    __builtin__.print = print
+
 def get_repo_root(model_name_or_path, local_rank=-1, token=None):
     """
     Downloads the specified model checkpoint and returns the repository where it was downloaded.
@@ -125,6 +137,9 @@ def get_ds_injection_policy(model_path):
     return policy
 
 def setup_distributed_model(model_path):
+    global_rank = int(os.getenv("RANK", "0"))
+    override_print(global_rank == 0)
+
     import deepspeed
 
     # List of model types that need max position embeddings capped at 8192
