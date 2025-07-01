@@ -87,9 +87,10 @@ for i in range(test_df.shape[0]):
 
 
 input_filename = args.filename.split('/')[-1].split('.')[0]
-if not os.path.exists(f'skill_inference_results/{input_filename}'):
-    os.makedirs(f'skill_inference_results/{input_filename}')
-output_filename = f"skill_inference_results/{input_filename}/{args.model_name}_{args.output_filename}.json"
+if not os.path.exists(f'./skill_inference_results/{input_filename}'):
+    os.makedirs(f'./skill_inference_results/{input_filename}')
+output_filename = f"./skill_inference_results/{input_filename}/{args.model_name}_{args.output_filename}.json"
+print(f"Output filename is: {os.path.abspath(output_filename)}")
 output_df = pd.DataFrame(output_dict)
 output_df.to_json(output_filename, orient='records', lines=True)
 end_time = time.time()
