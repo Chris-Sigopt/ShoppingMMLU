@@ -18,7 +18,7 @@ parser.add_argument('--print_interval', type=int, default=20)
 parser.add_argument('--output_filename', type=str, help='Suffix to output filename')
 parser.add_argument('--multi_choice_tokens', type=int, default=1, help='The maximum token length for multiple-choice questions. By default we set to 1. ')
 parser.add_argument('--seed', type=int, default=-1, help='random seed, default -1 is not set')
-parser.add_argument('--deepspeed', action="store_true")
+parser.add_argument('--deepspeed', action="store_true", default=False)
 parser.add_argument('--quant_config', default="")
 args = parser.parse_args()
 if args.seed != -1:
@@ -85,14 +85,15 @@ for i in range(test_df.shape[0]):
 
 
 
-
-input_filename = args.filename.split('/')[-1].split('.')[0]
-if not os.path.exists(f'./skill_inference_results/{input_filename}'):
-    os.makedirs(f'./skill_inference_results/{input_filename}')
-output_filename = f"./skill_inference_results/{input_filename}/{args.model_name}_{args.output_filename}.json"
-print(f"Output filename is: {os.path.abspath(output_filename)}")
-output_df = pd.DataFrame(output_dict)
-output_df.to_json(output_filename, orient='records', lines=True)
+# only write if necessary
+if (int(os.getenv("RANK", "0")) == 0):
+    input_filename = args.filename.split('/')[-1].split('.')[0]
+    if not os.path.exists(f'skill_inference_results/{input_filename}'):
+        os.makedirs(f'skill_inference_results/{input_filename}')
+    output_filename = f"skill_inference_results/{input_filename}/{args.model_name}_{args.output_filename}.json"
+    print(f"Output filename is: {os.path.abspath(output_filename)}")
+    output_df = pd.DataFrame(output_dict)
+    output_df.to_json(output_filename, orient='records', lines=True)
 end_time = time.time()
 
 if args.quant_config != "":
