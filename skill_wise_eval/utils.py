@@ -138,6 +138,7 @@ def get_ds_injection_policy(model_path):
 
 def setup_distributed_model(model_path):
     global_rank = int(os.getenv("RANK", "0"))
+    world_size = int(os.getenv("WORLD_SIZE", "0"))
     override_print(global_rank == 0)
 
     import deepspeed
@@ -160,7 +161,7 @@ def setup_distributed_model(model_path):
             token=None,
         )
     ds_inference_kwargs = {"dtype": torch.bfloat16}
-    ds_inference_kwargs["tensor_parallel"] = {"tp_size": 8}
+    ds_inference_kwargs["tensor_parallel"] = {"tp_size": world_size}
     ds_inference_kwargs["enable_cuda_graph"] = False
     ds_inference_kwargs["injection_policy"] = get_ds_injection_policy(model_path)
     ds_inference_kwargs["checkpoint"] = checkpoints_json.name
