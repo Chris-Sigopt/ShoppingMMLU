@@ -9,6 +9,8 @@ import transformers
 import numpy as np
 from utils import *
 
+# This code was converted to Synapse using the GPU Migration Toolkit
+# https://docs.habana.ai/en/latest/PyTorch/PyTorch_Model_Porting/GPU_Migration_Toolkit/GPU_Migration_Toolkit.html
 import habana_frameworks.torch.core as htcore
 # This type of tasks ask an LLM to generate a re-ranked list of indices
 # the evaluation metric is NDCG

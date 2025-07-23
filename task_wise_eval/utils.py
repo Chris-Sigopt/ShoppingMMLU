@@ -1,5 +1,8 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
+
+# This code was converted to Synapse using the GPU Migration Toolkit
+# https://docs.habana.ai/en/latest/PyTorch/PyTorch_Model_Porting/GPU_Migration_Toolkit/GPU_Migration_Toolkit.html
 import habana_frameworks.torch.core as htcore
 
 from huggingface_hub import list_repo_files, snapshot_download

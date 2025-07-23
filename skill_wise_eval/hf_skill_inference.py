@@ -9,6 +9,9 @@ import transformers
 import numpy as np
 from utils import *
 import os
+
+# This code was converted to Synapse using the GPU Migration Toolkit
+# https://docs.habana.ai/en/latest/PyTorch/PyTorch_Model_Porting/GPU_Migration_Toolkit/GPU_Migration_Toolkit.html
 import habana_frameworks.torch.core as htcore
 
 parser = argparse.ArgumentParser()
@@ -96,6 +99,8 @@ if (int(os.getenv("RANK", "0")) == 0):
     output_df.to_json(output_filename, orient='records', lines=True)
 end_time = time.time()
 
+#Quantization support based off of
+# https://github.com/huggingface/optimum-habana/tree/v1.18.0/examples/text-generation
 if args.quant_config != "":
     finalize_quantization(model, args.quant_config)
 

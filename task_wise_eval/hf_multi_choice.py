@@ -8,6 +8,9 @@ import torch
 import transformers
 from utils import *
 import os
+
+# This code was converted to Synapse using the GPU Migration Toolkit
+# https://docs.habana.ai/en/latest/PyTorch/PyTorch_Model_Porting/GPU_Migration_Toolkit/GPU_Migration_Toolkit.html
 import habana_frameworks.torch.core as htcore
 
 parser = argparse.ArgumentParser()
@@ -111,6 +114,8 @@ for i in range(all_samples):
         print(f"Sample {i}, pred {answer}, label {label}")
         print()
 
+#Quantization support based off of
+# https://github.com/huggingface/optimum-habana/tree/v1.18.0/examples/text-generation
 if quant_config != "":
     finalize_quantization(model, quant_config)
 
