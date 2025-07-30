@@ -1,5 +1,5 @@
 # Shopping MMLU
-This is the repository for 'Shopping MMLU: A Massive Multi-Task Online Shopping Benchmark for Large Language Models', which is accepted by **NeurIPS 2024 Datasets and Benchmarks Track** and used for [Amazon KDD Cup 2024](https://www.aicrowd.com/challenges/amazon-kdd-cup-2024-multi-task-online-shopping-challenge-for-llms). Shopping MMLU is a massive multi-task benchmark for LLMs on online shopping, covering four major shopping skills, **shopping concept understanding**, **shopping knowledge reasoning**, **user behavior alignment**, and **multi-lingual abilities**.
+This is the repository for the Gaudi version of 'Shopping MMLU: A Massive Multi-Task Online Shopping Benchmark for Large Language Models', which is accepted by **NeurIPS 2024 Datasets and Benchmarks Track** and used for [Amazon KDD Cup 2024](https://www.aicrowd.com/challenges/amazon-kdd-cup-2024-multi-task-online-shopping-challenge-for-llms). Shopping MMLU is a massive multi-task benchmark for LLMs on online shopping, covering four major shopping skills, **shopping concept understanding**, **shopping knowledge reasoning**, **user behavior alignment**, and **multi-lingual abilities**.
 
 <img width="1604" alt="image" src="https://github.com/user-attachments/assets/38b8784e-34cb-4add-81f8-538eb91ee1e0">
 
@@ -35,13 +35,18 @@ Files for other types of tasks are organized in `.json` formats with two fields,
 
 
 ### Setup
-First let's set up the Habana docker image
+First let's set up the docker image for running on the Gaudi chips. This will need the correct version of the Synapse drivers (Habana is the name of the team that created both the Gaudi Chips and the Synapse drivers). We recommend always working inside a docker image for this. The below line will create a new docker container with Synapse version 1.21.1, with a suitable Pytorch 2.6.0 for running on Gaudi chips, with the ~/ShoppingMMLU directory mounted as /shopping and all of the underlying machine's Gaudi chips visible. You can't mix and match Pytorch versions- we have modified Pytorch to run well on Gaudi chips and the Synapse and Pytorch versions have to be in sync.
+
 
 ```
 docker run -d -it --runtime=habana --name shopping -v ~/ShoppingMMLU:/shopping -e HABANA_VISIBLE_DEVICES=all -e OMPI_MCA_btl_vader_single_copy_mechanism=none --cap-add=sys_nice --ipc=host --net=host -e HF_HOME=/data/huggingface vault.habana.ai/gaudi-docker/1.21.1/ubuntu24.04/habanalabs/pytorch-installer-2.6.0:latest /bin/bash
 
 docker exec -it shopping /bin/bash
 ```
+
+Note that unlike with other companies environments, the HABANA_VISIBLE_DEVICES environment setting only has effect at docker container creation time- you can't prepend a HABANA_VISIBLE_DEVICES flag in front of a Python script- it will have no effect. If you want to use fewer than "all" you can replace that section with
+`HABANA_VISIBLE_DEVICES=0,1,2,3` You can use all cards, two sets of four cards (either 0,1,2,3 or 4,5,6,7), four sets of two cards (0,1 and 2,3 etc.), or eight separate cards.
+
 
 Then inside your docker container you will want to go to /shopping and install the requirements:
 
@@ -56,7 +61,9 @@ mkdir data
 unzip data.zip -d data/
 ```
 
-Note that the requirements.txt file uses the correct versions of the libraries for PyTorch 2.6.0. Always use the pytorch version associated with your docker image, e.g. if running Synapse v1.19.0 you'd want to be running Pytorch 2.5.1 instead (and then would need to adjust the versions of transformers, sentence_transformers etc you are using). Also, Docker synapse versions are generally backwards compatible across a reasonable range of versions: the host OS Synapse version can be a bit ahead of the docker image and everything will still work, but be wary of having a Docker image that is a Synapse version ahead of the host OS, that will often lead to trouble.
+Note that the requirements.txt file uses the correct versions of the libraries for PyTorch 2.6.0. If you are using a different version of the docker container, you might need to adjust the versions in requirements.txt
+
+Docker synapse versions are generally backwards compatible across a reasonable range of versions: the host OS Synapse version can be a several versions ahead of the docker image and everything will still work, but be wary of having a Docker image that is a Synapse version ahead of the host OS, that will often lead to trouble.
 
 ### Evaluation on a Single Task
 Suppose you want to evaluate `Vicuna-7B-v1.5` model on the `multiple_choice` task of `asin_compatibility`, you can do the following steps.
@@ -66,6 +73,7 @@ python3 hf_multi_choice.py --test_subject asin_compatibility --model_name vicuna
 # The 'model_name' argument should be set according to 'utils.py'.
 ```
 Other tasks in other task types involve similar processes.
+
 ### Evaluation on a Skill as a whole
 Suppose you want to evaluate `Vicuna-7B-v1.5` model on the skill of `skill1_concept`, you can do the following steps.
 ```
@@ -94,11 +102,11 @@ sacrebleu[jp]
 ## Code Conversion
 To convert code from regular PyTorch to run on Gaudi chips you need to make the following changes.
 
-1. As documented here: [GPU Migration Toolkit](https://docs.habana.ai/en/latest/PyTorch/PyTorch_Model_Porting/GPU_Migration_Toolkit/GPU_Migration_Toolkit.html) the GPU Migration Toolkit makes it easy to adapt existing code to run on Habana. In this case the [first commit] (https://github.com/KL4805/ShoppingMMLU/commit/1e73692024d9eb4e362103152631c1559c8bad18) adapted all of the code to at least run on Gaudi chips.
+1. As documented here: [GPU Migration Toolkit](https://docs.habana.ai/en/latest/PyTorch/PyTorch_Model_Porting/GPU_Migration_Toolkit/GPU_Migration_Toolkit.html) the GPU Migration Toolkit makes it easy to adapt existing code to run on Habana. In this case the [first commit](https://github.com/KL4805/ShoppingMMLU/commit/1e73692024d9eb4e362103152631c1559c8bad18) adapted all of the code to at least run on Gaudi chips.
 
-2. To add support for FP8 quantization, you will need the [Intel Neural Compressor] (https://github.com/intel/neural-compressor). You can see the changes necessary to add support for a single file in [this commit] (https://github.com/KL4805/ShoppingMMLU/commit/1b1befe4206ab661f2b86493cffe6e05ee8dea67). There are three functions necessary for this: convert, prepare, and finalize_quantization. prepare() converts a model to track what quantization is necessary, finalize_quantization() saves the results of that model being run on some sample data to a quantization file, and convert uses the existing quantization file (calculated by the prepare function, stored in the finalize_quantization() function) in an actual model to get actual results.
+2. To add support for FP8 quantization, you will need the [Intel Neural Compressor](https://github.com/intel/neural-compressor). You can see the changes necessary to add support for a single file in [this commit](https://github.com/KL4805/ShoppingMMLU/commit/1b1befe4206ab661f2b86493cffe6e05ee8dea67). There are three functions necessary for this: convert, prepare, and finalize_quantization. prepare() converts a model to track what quantization is necessary, finalize_quantization() saves the results of that model being run on some sample data to a quantization specification file, and convert() uses the existing quantization file (calculated by the prepare function, stored in the finalize_quantization() function) in an actual model to get actual results.
 
-3. Finally, adding support for models too large to fit onto a single card requires the Deepspeed tool to be included to run across multiple cards- also if you want to speed up computation by using multiple cards compute power. As you can see from the [the main commit](https://github.com/KL4805/ShoppingMMLU/commit/4a430c7e7ab82a35d6b3aea26b0660f1d95df12d) there needs to be a lot of boilerplate code. Most of this is unrelated to the actual multi-node running. The problem is that because of the Deepspeed architecture (which runs separate Python processes- running identical code- for each Gaudi we are trying to run on) we don't want to run some things (most importantly, I/O tasks like downloading models, printing out results, etc.) on every process, so we have to suppress anything that doesn't run on the 0th logical card from doing those tasks. That requires some ugly code- e.g. we can't rely on the standard Huggingface library to deal with a model, we have to pull that code into our code so we can ensure that it is done exactly once.
+3. Finally, adding support for models too large to fit onto a single card requires the Deepspeed tool to be included to run across multiple cards- also if you want to speed up computation by using multiple cards compute power. As you can see from the [the main commit](https://github.com/KL4805/ShoppingMMLU/commit/4a430c7e7ab82a35d6b3aea26b0660f1d95df12d) there needs to be a lot of boilerplate code. Most of this is unrelated to the actual multi-node running. The problem is that because of the Deepspeed architecture (which runs separate Python processes- running identical code- for each Gaudi we are trying to run on) we don't want to run some things (most importantly, I/O tasks like downloading models, printing out results, etc.) on every process, so we have to suppress anything that isn't running on the 0th logical card from doing those tasks. That requires some ugly code- e.g. we can't rely on the standard Huggingface library to download a model, we have to pull that code into our code so we can ensure that it is done exactly once.
 
 There are various other commits cleaning up bugs or adding convenance features like a requirements.txt or docker files, etc. Do be sure to check the full gaudi_main branch to get all of those bug fixes and convenance, but these three commits each demonstrate the core of the work to add that feature.
 
