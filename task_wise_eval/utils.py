@@ -273,6 +273,9 @@ def load_tokenizer_and_model(model_name, quant_config, use_deepspeed=False):
     if model_name == 'llama3-8b-instruct':
         model_path = 'meta-llama/Meta-Llama-3-8B-Instruct'
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+
+    #Deepspeed support based off of
+    # https://github.com/huggingface/optimum-habana/tree/v1.18.0/examples/text-generation
     if use_deepspeed:
         model = setup_distributed_model(model_path)
     else:
@@ -282,6 +285,8 @@ def load_tokenizer_and_model(model_name, quant_config, use_deepspeed=False):
             model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
         else:
             model = AutoModelForCausalLM.from_pretrained(model_path, device_map='auto', torch_dtype=torch.float16, trust_remote_code=True).to("hpu")
+    #Quantization support based off of
+    # https://github.com/huggingface/optimum-habana/tree/v1.18.0/examples/text-generation
     if quant_config != "":
         model = setup_quantization(model, quant_config)
     model = torch.compile(model,backend="hpu_backend")
