@@ -35,7 +35,7 @@ Files for other types of tasks are organized in `.json` formats with two fields,
 
 
 ### Setup
-First let's set up the docker image for running on the Gaudi chips. This will need the correct version of the Synapse drivers (Habana is the name of the team that created both the Gaudi Chips and the Synapse drivers). We recommend always working inside a docker image for this. The below line will create a new docker container with Synapse version 1.21.1, with a suitable Pytorch 2.6.0 for running on Gaudi chips, with the ~/ShoppingMMLU directory mounted as /shopping and all of the underlying machine's Gaudi chips visible. You can't mix and match Pytorch versions- we have modified Pytorch to run well on Gaudi chips and the Synapse and Pytorch versions have to be in sync.
+First let's set up the docker image for running on the Gaudi chips. This will need the correct version of the Synapse drivers (Habana is the name of the team that created both the Gaudi Chips and the Synapse drivers). We recommend always working inside a docker image for this. The below line will create a new docker container with Synapse version 1.21.1, with a suitable Pytorch 2.6.0 for running on Gaudi chips, with the ~/ShoppingMMLU directory mounted as /shopping and all of the underlying machine's Gaudi chips visible. You can't mix and match Pytorch versions- we have modified Pytorch to run well on Gaudi chips and the Synapse and Pytorch versions have to be in sync. Update the `-v ~/ShoppingMMLU:/shopping` to point to the correct path for where you cloned this repo, mounting it as `/shopping`.
 
 
 ```
@@ -66,24 +66,48 @@ Note that the requirements.txt file uses the correct versions of the libraries f
 Docker synapse versions are generally backwards compatible across a reasonable range of versions: the host OS Synapse version can be a several versions ahead of the docker image and everything will still work, but be wary of having a Docker image that is a Synapse version ahead of the host OS, that will often lead to trouble.
 
 ### Evaluation on a Single Task
-Suppose you want to evaluate `Vicuna-7B-v1.5` model on the `multiple_choice` task of `asin_compatibility`, you can do the following steps.
+Suppose you want to evaluate `meta-llama/Meta-Llama-3-8B` model on the `multiple_choice` task of `asin_compatibility`, you can do the following steps.
 ```
 cd task_wise_eval/
-python3 hf_multi_choice.py --test_subject asin_compatibility --model_name vicuna2
+python3 hf_multi_choice.py --test_subject asin_compatibility --model_name llama3-8b
 # The 'model_name' argument should be set according to 'utils.py'.
 ```
-Other tasks in other task types involve similar processes.
+Other tasks in other task types involve similar processes. There is also a docker_compose.yml file which will setup and run this automatically (`docker compose -f docker_compose.yml up`). You will need to add your Huggingface token with access to the Llama3-8B model to download the model and update the volume path as necessary.
+
+### FP8 Evaluation
+Suppose you want to evaluate `meta-llama/Meta-Llama-3-8B` model on the `multiple_choice` task of `asin_compatibility` with FP8, you can do the following steps.
+```
+cd task_wise_eval/
+python3 hf_multi_choice.py --test_subject asin_compatibility --model_name llama3-8b --quant_config quant_config/maxabs_measure.json
+python3 hf_multi_choice.py --test_subject asin_compatibility --model_name llama3-8b --quant_config quant_config/maxabs_quant.json
+# The 'model_name' argument should be set according to 'utils.py'.
+```
+Running with the maxabs_measure.json file will modify the model so that it captures the quantization necessary for FP8, and then saves it to the `./inc_output/measure` directory. Then running again with the maxabs_quant.json file will actually use the FP8 quantization stored in the previous run and use it to run the tasks, evaluating their accuracy as normal.
+At the moment hf_multi_choice is the only task with the quant-config flag added, but this is easy to add to the other tasks if desired. There is also a docker_compose_fp8.yml file which will setup and run this automatically. You will need to add your Huggingface token with access to the Llama3-8B model to download the model and update the volume path as necessary.
+
+### Larger Models
+Suppose you want to evaluate the `meta-llama/Llama-3.1-70B-Instruct` model, which is too large to evaluate on a single Gaudi3 card. To do that, you need to do the following steps:
+
+```
+cd task_wise_eval/
+pip install git+https://github.com/HabanaAI/DeepSpeed.git@1.21.0
+deepspeed --num_nodes 1 --num_gpus 8 --no_local_rank --master_port 29500 hf_multi_choice.py --test_subject asin_compatibility --model_name llama3-70b --deepspeed
+# The 'model_name' argument should be set according to 'utils.py'.
+```
+The Deepspeed tool will use all 8 GPU's on the local node, communicating on port 29500, and call the hf_multi_choice.py script with all of the flags that follow. The deepspeed flag is set for convenance.
+At the moment hf_multi_choice is the only task with the deepspeed flag added, but this is easy to add to the other tasks if desired. There is also a docker-compose_multi.yml file which will setup and run this automatically. You will need to add your Huggingface token with access to the Llama3-70B model to download the model and update the volume path as necessary.
+
 
 ### Evaluation on a Skill as a whole
-Suppose you want to evaluate `Vicuna-7B-v1.5` model on the skill of `skill1_concept`, you can do the following steps.
+Suppose you want to evaluate `Llama3-8B` model on the skill of `skill1_concept`, you can do the following steps.
 ```
 cd skill_wise_eval/
-python3 hf_skill_inference.py --model_name vicuna2 --filename skill1_concept --output_filename <your_filename>
-# After inference, the output file will be saved at `skill_inference_results/skill1_concept/vicuna2_<your_filename>.json`.
-python3 skill_evaluation.py --data_filename skill1_concept --output_filename vicuna2_<your_filename>
-# After evaluation, the metrics will be saved at `skill_metrics/skill1_concept/vicuna2_<your_filename>_metrics.json`.
+python3 hf_skill_inference.py --model_name llama3-8b --filename skill1_concept --output_filename <your_filename>
+# After inference, the output file will be saved at `skill_inference_results/skill1_concept/llama3-8b_<your_filename>.json`.
+python3 skill_evaluation.py --data_filename skill1_concept --output_filename llama3-8b_<your_filename>
+# After evaluation, the metrics will be saved at `skill_metrics/skill1_concept/llama3-8b_<your_filename>_metrics.json`.
 ```
-Other skills involve similar processes.
+Other skills follow the same process. There are FP8 and larger model adaptions to this code as well, as well as docker-compose files which automate the process of running these.
 
 ### Dependencies
 Our evaluation code is based on HuggingFace `transformers` with the following dependencies.
