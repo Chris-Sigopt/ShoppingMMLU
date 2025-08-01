@@ -22,5 +22,5 @@ services:
         mkdir data
         unzip data.zip -d data/
         cd skill_wise_eval
-        deepspeed --num_nodes 1 --num_gpus 8 --no_local_rank --master_port 29500 hf_skill_inference.py --model_name llama2-70b --filename skill1_concept --output_filename output_docker_test --deepspeed
-        python3 skill_evaluation.py --data_filename skill1_concept --output_filename llama2-70b_output_docker_test
+        deepspeed --num_nodes 1 --num_gpus 8 --no_local_rank --master_port 29500 hf_skill_inference.py --model_name llama3-70b --filename skill1_concept --output_filename output_docker_test --deepspeed
+        python3 skill_evaluation.py --data_filename skill1_concept --output_filename llama3-70b_output_docker_test

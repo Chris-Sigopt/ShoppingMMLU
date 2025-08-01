@@ -24,4 +24,4 @@ services:
         mkdir data
         unzip data.zip -d data/
         cd task_wise_eval
-        deepspeed --num_nodes 1 --num_gpus 8 --no_local_rank --master_port 29500 hf_multi_choice.py --test_subject asin_compatibility --model_name llama2-70b --deepspeed
+        deepspeed --num_nodes 1 --num_gpus 8 --no_local_rank --master_port 29500 hf_multi_choice.py --test_subject asin_compatibility --model_name llama3-70b --deepspeed
